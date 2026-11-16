@@ -1,0 +1,173 @@
+{
+  "entities": {
+    "Story": {
+      "title": "Story",
+      "description": "An interactive adventure story definition configured by an admin.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Display title of the adventure story."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short synopsis shown on the Netflix-style story card."
+        },
+        "systemPrompt": {
+          "type": "string",
+          "description": "System instruction prompt guiding Gemini for this story's world and rules."
+        },
+        "coverImage": {
+          "type": "string",
+          "description": "Cover image URL, data reference, or bundled preset key (e.g., preset:mystic_realm)."
+        },
+        "genre": {
+          "type": "string",
+          "description": "Adventure category badge shown on the card."
+        },
+        "openingLine": {
+          "type": "string",
+          "description": "Initial opening narrative message when a player starts the story."
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether the story is active and visible to players."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the story was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the story was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "title",
+        "description",
+        "systemPrompt",
+        "coverImage",
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated player profile storing their chosen in-game name.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user."
+        },
+        "name": {
+          "type": "string",
+          "description": "Player name entered once (e.g., Vansh) used by the AI storyteller."
+        },
+        "email": {
+          "type": "string",
+          "description": "Verified Google account email address."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StoryChat": {
+      "title": "StoryChat",
+      "description": "Isolated per-user, per-story chat session with rolling summary and message list.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the player."
+        },
+        "storyId": {
+          "type": "string",
+          "description": "ID of the story being played."
+        },
+        "storyTitle": {
+          "type": "string",
+          "description": "Denormalized story title for admin inspection."
+        },
+        "messages": {
+          "type": "array",
+          "description": "List of chat message maps ({id, role, content, timestampMs, options})."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Auto-generated memory summary updated every 20 messages."
+        },
+        "messageCount": {
+          "type": "integer",
+          "description": "Total number of messages exchanged in this story session."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the chat session started."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last chat activity."
+        }
+      },
+      "required": [
+        "userId",
+        "storyId",
+        "messages",
+        "summary",
+        "messageCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminEntry": {
+      "title": "AdminEntry",
+      "description": "Server-managed admin allowlist marker document.",
+      "type": "object",
+      "properties": {
+        "grantedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when admin role was granted."
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/stories/{storyId}": {
+      "schema": { "$ref": "#/entities/Story" },
+      "description": "Adventure stories catalog displayed on the home screen and managed in /admin."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Player profiles keyed by Firebase Auth UID."
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/StoryChat" },
+      "description": "Per-user per-story isolated chat histories keyed by {userId}_{storyId}."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminEntry" },
+      "description": "Read-only admin registry documents."
+    }
+  }
+}

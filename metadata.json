@@ -1,0 +1,6 @@
+{
+  "name": "StoryQuest",
+  "description": "Interactive AI adventure story game with custom choices, live voice conversations, AI scene illustrations, and an admin story studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

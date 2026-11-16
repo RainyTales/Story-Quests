@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.get('email_verified', false) == true &&
+         request.auth.token.get('email', '') == 'rainytalesstudio@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // --- VALIDATION HELPERS ---
+    function isValidStory(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
+             data.systemPrompt is string && data.systemPrompt.size() >= 1 && data.systemPrompt.size() <= 4000 &&
+             data.coverImage is string && data.coverImage.size() >= 1 && data.coverImage.size() <= 2000 &&
+             (!('genre' in data) || (data.genre is string && data.genre.size() <= 50)) &&
+             (!('openingLine' in data) || (data.openingLine is string && data.openingLine.size() <= 2000)) &&
+             data.isActive is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 160)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStoryChat(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.storyId is string && isValidId(data.storyId) &&
+             (!('storyTitle' in data) || (data.storyTitle is string && data.storyTitle.size() <= 120)) &&
+             data.messages is list && data.messages.size() <= 200 &&
+             (data.messages.size() == 0 || data.messages[0] is map) &&
+             data.summary is string && data.summary.size() <= 4000 &&
+             data.messageCount is int && data.messageCount >= 0 && data.messageCount <= 100000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- STORIES COLLECTION ---
+    match /stories/{storyId} {
+      allow get: if isSignedIn() && isValidId(storyId) && ((resource != null && existing().isActive == true) || isAdmin());
+      allow list: if isSignedIn() && (existing().isActive == true || isAdmin());
+
+      allow create: if isAdmin() &&
+                       isValidId(storyId) &&
+                       incoming().keys().hasAll(['title', 'description', 'systemPrompt', 'coverImage', 'isActive', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['title', 'description', 'systemPrompt', 'coverImage', 'genre', 'openingLine', 'isActive', 'createdAt', 'updatedAt']) &&
+                       isValidStory(incoming());
+
+      allow update: if isAdmin() &&
+                       isValidId(storyId) &&
+                       isValidStory(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'systemPrompt', 'coverImage', 'genre', 'openingLine', 'isActive', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(storyId);
+    }
+
+    // --- USERS COLLECTION ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'name', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'email', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       (request.auth.uid == userId || isAdmin()) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+    }
+
+    // --- CHATS COLLECTION ---
+    match /chats/{chatId} {
+      allow get: if isSignedIn() && isValidId(chatId) && (
+        (resource == null && chatId.matches('^' + request.auth.uid + '_.*$')) ||
+        (resource != null && existing().userId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if (isSignedIn() && existing().userId == request.auth.uid) || isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(chatId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'storyId', 'messages', 'summary', 'messageCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'storyId', 'storyTitle', 'messages', 'summary', 'messageCount', 'createdAt', 'updatedAt']) &&
+                       isValidStoryChat(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(chatId) &&
+                       isValidStoryChat(incoming()) &&
+                       (existing().userId == request.auth.uid || isAdmin()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().storyId == existing().storyId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['storyTitle', 'messages', 'summary', 'messageCount', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(chatId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // --- ADMINS COLLECTION ---
+    match /admins/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list, write: if false;
+    }
+  }
+}

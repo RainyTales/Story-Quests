@@ -1,0 +1,35 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'rainytalesstudio@gmail.com'
+      );
+    }
+
+    function isValidImageUpload() {
+      return request.resource != null &&
+             request.resource.size < 10 * 1024 * 1024 &&
+             request.resource.contentType.matches('image/.*');
+    }
+
+    match /scene_illustrations/{userId}/{storyId}/{fileName} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && request.auth.uid == userId && isValidImageUpload();
+    }
+
+    match /story_covers/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidImageUpload();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
